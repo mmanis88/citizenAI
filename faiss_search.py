@@ -6,11 +6,12 @@ import requests
 from sentence_transformers import SentenceTransformer
 
 # Load the same model and FAISS index used in indexing
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
 
 def search_faiss_index(query, index, metadata, top_k=5):
     # Convert the query to an embedding
-    query_vector = model.encode(query).reshape(1, -1).astype('float32')
+    query_vector = model.encode(query).reshape(1, -1).astype("float32")
     faiss.normalize_L2(query_vector)  # Normalize for cosine similarity
 
     # Search FAISS index
@@ -31,6 +32,7 @@ def search_faiss_index(query, index, metadata, top_k=5):
 
     return results
 
+
 def fetch_wikipedia_summary(query):
     url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query}"
     try:
@@ -40,7 +42,7 @@ def fetch_wikipedia_summary(query):
             return {
                 "title": data.get("title"),
                 "summary": data.get("extract"),
-                "url": data.get("content_urls", {}).get("desktop", {}).get("page", "")
+                "url": data.get("content_urls", {}).get("desktop", {}).get("page", ""),
             }
         else:
             print(f"Wikipedia API returned status code {response.status_code}")
@@ -48,5 +50,3 @@ def fetch_wikipedia_summary(query):
     except Exception as e:
         print(f"Error fetching data from Wikipedia API: {e}")
         return None
-
-
