@@ -1,20 +1,45 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-import openai
-from faiss_search import search_faiss_index  # Import the updated function
+import os
 import pickle
-import faiss
 
+import faiss
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from openai import AuthenticationError, OpenAI
+
+from faiss_search import search_faiss_index  # Import the updated function
+
+load_dotenv()
+
+# Configuration using environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "faiss_index.idx")
+METADATA_PATH = os.getenv("METADATA_PATH", "metadata.pkl")
+FRONTEND_DIR = os.getenv("FRONTEND_DIR", "frontend")
+
+# Validate API key
+if not OPENAI_API_KEY:
+    raise RuntimeError(
+        "OpenAI API key is not set. Ensure OPENAI_API_KEY is passed as an environment variable."
+    )
+
+# Initialize the OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# FastAPI app initialization
 app = FastAPI()
 
-# OpenAI API key
-openai.api_key = "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"
-
 # Serve the frontend directory at "/static"
-app.mount("/static", StaticFiles(directory="frontend", html=True), name="static")
+static_dir = os.path.join(FRONTEND_DIR, "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# CORS setup
+# Jinja2 template setup
+templates = Jinja2Templates(directory=FRONTEND_DIR)
+
+# CORS middleware setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,46 +48,128 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load FAISS index and metadata
-embedding_dim = 384
-index = faiss.read_index("CITIZENAI/faiss_index.idx")  # Load the FAISS index
-with open("CITIZENAI/metadata.pkl", "rb") as f:
-    metadata = pickle.load(f)  # Load metadata
 
-# Generate summary with clickable citations
-def generate_summary_with_clickable_citations(query, context_with_links):
+# Load FAISS index and metadata
+def load_resources(faiss_path: str, metadata_path: str):
+    """Load the FAISS index and metadata."""
+    try:
+        index = faiss.read_index(faiss_path)
+        with open(metadata_path, "rb") as f:
+            metadata = pickle.load(f)
+        return index, metadata
+    except Exception as e:
+        raise RuntimeError(f"Error loading FAISS index or metadata: {e}")
+
+
+index, metadata = load_resources(FAISS_INDEX_PATH, METADATA_PATH)
+
+
+# Function to generate summary with clickable citations
+def generate_summary_with_clickable_citations(
+    query: str,
+    context_with_links: str,
+    model: str = "gpt-4",
+    max_tokens: int = 300,
+    temperature: float = 0.5,
+) -> str:
+    """
+    Generates a summary with clickable HTML citations.
+
+    Args:
+        query (str): The user's query.
+        context_with_links (str): Context including clickable HTML links.
+        model (str): Model to use. Default is "gpt-4".
+        max_tokens (int): Maximum tokens in the response. Default is 300.
+        temperature (float): Sampling temperature. Default is 0.5.
+
+    Returns:
+        str: Summary with clickable citations or error message.
+    """
     messages = [
-        {"role": "system", "content": "You are a knowledgeable assistant that provides answers with inline clickable citations."},
-        {"role": "user", "content": f"Summarize the following information, embedding clickable citations as HTML links:\n\nQuery: {query}\n\nContext:\n{context_with_links}\n\nAnswer with inline clickable citations:"}
+        {
+            "role": "system",
+            "content": "You are a knowledgeable assistant that provides answers with inline clickable citations.",
+        },
+        {
+            "role": "user",
+            "content": f"Summarize the following information, embedding clickable citations as HTML links:\n\nQuery: {query}\n\nContext:\n{context_with_links}\n\nAnswer with inline clickable citations:",
+        },
     ]
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
+        response = client.chat.completions.create(
+            model=model,
             messages=messages,
-            max_tokens=300,
-            temperature=0.5
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
-        return response.choices[0].message['content'].strip()
+        return response.choices[0].message.content.strip()
+    except AuthenticationError:
+        return "Authentication failed. Please check your API key."
     except Exception as e:
-        print(f"Error generating summary with clickable citations: {e}")
-        return "Error generating summary with clickable citations."
+        print(f"Error generating summary: {e}")
+        return "An error occurred while generating the summary. Please try again later."
 
-# Search endpoint using the new search functionality
+
+# Root endpoint to serve HTML
+@app.get("/", response_class=HTMLResponse)
+async def serve_html(request: Request):
+    """
+    Serve the main HTML page at the root endpoint.
+    """
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint to verify the service is running.
+    """
+    return {"status": "healthy", "message": "Service is up and running!"}
+
+
+# Search endpoint
 @app.get("/search")
 async def search_query(query: str, top_k: int = 5):
-    if not query:
-        raise HTTPException(status_code=400, detail="Query parameter is missing")
+    """
+    Handles search requests by querying the FAISS index and returning
+    a summary with clickable citations.
+    """
+    if not query.strip():
+        raise HTTPException(
+            status_code=400, detail="Query parameter is missing or empty."
+        )
 
-    # Use the updated search function, which includes the Wikipedia fallback
-    results = search_faiss_index(query, index, metadata, top_k=top_k)
-    context_with_links = ""
-    sources = []
+    try:
+        # Query the FAISS index
+        results = search_faiss_index(query, index, metadata, top_k=top_k)
+        if not results:
+            raise HTTPException(
+                status_code=404, detail="No results found for the query."
+            )
 
-    # Create the context with clickable links
-    for doc in results:
-        context_with_links += f"\nSource: <a href='{doc['url']}' target='_blank'>{doc['title']}</a>\nContent: {doc.get('summary', doc.get('extract', 'No summary available'))}\n"
-        sources.append({"title": doc['title'], "url": doc['url']})
+        context_with_links = ""
+        sources = []
 
-    summary_with_clickable_citations = generate_summary_with_clickable_citations(query, context_with_links)
+        # Construct context with clickable links
+        for doc in results:
+            context_with_links += (
+                f"\nSource: <a href='{doc['url']}' target='_blank'>{doc['title']}</a>\n"
+                f"Content: {doc.get('summary', doc.get('extract', 'No summary available'))}\n"
+            )
+            sources.append({"title": doc["title"], "url": doc["url"]})
 
-    return {"summary": summary_with_clickable_citations, "sources": sources}
+        # Generate summary with citations
+        summary_with_clickable_citations = generate_summary_with_clickable_citations(
+            query, context_with_links
+        )
+
+        return {"summary": summary_with_clickable_citations, "sources": sources}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error processing search query: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while processing the search request.",
+        )
