@@ -22,15 +22,15 @@ def test_openai_api_key_is_valid():
         client = OpenAI(api_key=OPENAI_API_KEY)
 
         # Make a simple request to validate the API key
-        response = client.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            prompt="This is a test.",
-            max_tokens=5,
+            messages=[{"role": "user", "content": "This is a test."}],
+            max_tokens=5
         )
 
         # Validate the response
         assert (
-            response.choices[0].text.strip() != ""
+            response.choices[0].message.content.strip() != ""
         ), "Response is empty, API key might be invalid."
     except AuthenticationError:
         pytest.fail(
@@ -38,6 +38,7 @@ def test_openai_api_key_is_valid():
         )
     except Exception as e:
         pytest.fail(f"Unexpected error while validating OpenAI API key: {e}")
+
 
 
 # Test the `/search` endpoint with valid input

@@ -14,7 +14,7 @@ RUN pip install --default-timeout=100 poetry
 
 
 # Install project dependencies using Poetry
-RUN poetry install --no-root --only main
+RUN poetry install --no-root  --with dev
 
 
 # Copy project files
