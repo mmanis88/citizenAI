@@ -1,17 +1,20 @@
 # CITIZENAI/faiss_indexer.py
 
 import os
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
-import requests
 import pickle
 import time
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+import faiss
+import numpy as np
+import requests
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
 
 def create_faiss_index(embedding_dim=384):
     return faiss.IndexFlatIP(embedding_dim)
+
 
 def fetch_category_articles(category, num_articles=30):
     """
@@ -23,11 +26,12 @@ def fetch_category_articles(category, num_articles=30):
         "list": "categorymembers",
         "cmtitle": f"Category:{category}",
         "format": "json",
-        "cmlimit": num_articles
+        "cmlimit": num_articles,
     }
     response = requests.get(search_url, params=params)
     data = response.json()
-    return [item['title'] for item in data.get("query", {}).get("categorymembers", [])]
+    return [item["title"] for item in data.get("query", {}).get("categorymembers", [])]
+
 
 def fetch_article_summary(title):
     """
@@ -41,11 +45,12 @@ def fetch_article_summary(title):
             "title": data.get("title", ""),
             "description": data.get("description", ""),
             "extract": data.get("extract", ""),
-            "url": data.get("content_urls", {}).get("desktop", {}).get("page", "")
+            "url": data.get("content_urls", {}).get("desktop", {}).get("page", ""),
         }
     else:
         print(f"Error fetching article: {title}")
         return None
+
 
 def fetch_and_index_articles(titles, index):
     doc_vectors = []
@@ -60,11 +65,12 @@ def fetch_and_index_articles(titles, index):
             metadata.append(article)
 
     if doc_vectors:
-        doc_vectors = np.vstack(doc_vectors).astype('float32')
+        doc_vectors = np.vstack(doc_vectors).astype("float32")
         faiss.normalize_L2(doc_vectors)
         index.add(doc_vectors)
-    
+
     return metadata
+
 
 if __name__ == "__main__":
     start_time = time.time()
@@ -90,5 +96,7 @@ if __name__ == "__main__":
     with open(os.path.join("CITIZENAI", "metadata.pkl"), "wb") as f:
         pickle.dump(metadata, f)
 
-    print(f"FAISS index and metadata saved using category-based and incremental approach.")
+    print(
+        f"FAISS index and metadata saved using category-based and incremental approach."
+    )
     print(f"Total time taken: {time.time() - start_time:.2f} seconds")
