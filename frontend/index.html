@@ -1,71 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Citizen AI - Ask Anything!</title>
     <!-- Update path to load CSS directly from root -->
-    <link rel="stylesheet" href="./static/css/styles.css">
-</head>
-<body>
+    <link rel="stylesheet" href="./static/css/styles.css" />
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <!-- Update path to load image directly from root -->
-            <img src="./static/images/logo.png" alt="Citizen AI Logo" class="logo">
-            <h1>Citizen AI</h1>
-            <p>Ask me anything, and I’ll find an answer just for you!</p>
-        </div>
-        
-        <form id="searchForm" class="search-form">
-            <input type="text" id="queryInput" name="query" placeholder="What would you like to know?" required autocomplete="off">
-          
-        </form>
+      <div class="header">
+        <!-- Update path to load image directly from root -->
+        <img
+          src="./static/images/logo.png"
+          alt="Citizen AI Logo"
+          class="logo"
+        />
+        <h1>Citizen AI</h1>
+        <p>Ask me anything, and I’ll find an answer just for you!</p>
+      </div>
 
-        <div id="summaryContainer" class="summary">
-            <h2>Here’s what I found:</h2>
-            <p id="answerText">Your answer will appear here.</p>
-        </div>
+      <form id="searchForm" class="search-form">
+        <input
+          type="text"
+          id="queryInput"
+          name="query"
+          placeholder="What would you like to know?"
+          required
+          autocomplete="off"
+        />
+      </form>
 
-        <div id="sourcesContainer" class="sources">
-            <h3>Where I found this:</h3>
-            <div id="sourcesList" class="source-list"></div>
-        </div>
+      <div id="summaryContainer" class="summary">
+        <h2>Here’s what I found:</h2>
+        <p id="answerText">Your answer will appear here.</p>
+      </div>
+
+      <div id="sourcesContainer" class="sources">
+        <h3>Where I found this:</h3>
+        <div id="sourcesList" class="source-list"></div>
+      </div>
     </div>
 
     <script>
-        async function fetchResults(query) {
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/search?query=${encodeURIComponent(query)}`);
-                const data = await response.json();
+      async function fetchResults(query) {
+        try {
+          const baseURL = window.location.origin;
+          const response = await fetch(
+            `${baseURL}/search?query=${encodeURIComponent(query)}`
+          );
+          const data = await response.json();
 
-                document.getElementById('answerText').innerHTML = '';
-                document.getElementById('sourcesList').innerHTML = '';
+          document.getElementById("answerText").innerHTML = "";
+          document.getElementById("sourcesList").innerHTML = "";
 
-                if (data.error) {
-                    document.getElementById('answerText').innerHTML = `<p>${data.error}</p>`;
-                } else {
-                    document.getElementById('answerText').innerHTML = `<p>${data.summary}</p>`;
-                    data.sources.forEach(source => {
-                        document.getElementById('sourcesList').innerHTML += `
+          if (data.error) {
+            document.getElementById(
+              "answerText"
+            ).innerHTML = `<p>${data.error}</p>`;
+          } else {
+            document.getElementById(
+              "answerText"
+            ).innerHTML = `<p>${data.summary}</p>`;
+            data.sources.forEach((source) => {
+              document.getElementById("sourcesList").innerHTML += `
                             <div class="source-item">
                                 <img src="./static/images/book-icon.png" alt="Book Icon" class="source-icon">
                                 <a href="${source.url}" target="_blank">${source.title}</a>
                             </div>
                         `;
-                    });
-                }
-            } catch (error) {
-                console.error("Fetch error:", error);
-                document.getElementById('answerText').innerHTML = '<p>Something went wrong. Please try again.</p>';
-            }
+            });
+          }
+        } catch (error) {
+          console.error("Fetch error:", error);
+          document.getElementById("answerText").innerHTML =
+            "<p>Something went wrong. Please try again.</p>";
         }
+      }
 
-        
-        document.getElementById('searchForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const query = document.getElementById('queryInput').value;
-            if (query) fetchResults(query);
+      document
+        .getElementById("searchForm")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          const query = document.getElementById("queryInput").value;
+          if (query) fetchResults(query);
         });
     </script>
-</body>
+  </body>
 </html>
