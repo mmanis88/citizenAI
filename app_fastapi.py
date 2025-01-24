@@ -3,20 +3,15 @@ import pickle
 
 import faiss
 from dotenv import load_dotenv
-from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openai import AuthenticationError, OpenAI
-from passlib.context import CryptContext
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
-from database import get_db, init_db
 from faiss_search import search_faiss_index  # Import the updated function
-from models.user import User
 
 load_dotenv()
 
@@ -35,9 +30,6 @@ if not OPENAI_API_KEY:
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # FastAPI app initialization
@@ -121,23 +113,6 @@ def generate_summary_with_clickable_citations(
         return "An error occurred while generating the summary. Please try again later."
 
 
-# Hash password
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-# Verify password
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-# User authentication dependency
-def get_current_user(session: str = Cookie(None)):
-    if not session:
-        return None
-    return session
-
-
 # Root endpoint to serve HTML
 security = HTTPBasic()
 
@@ -146,7 +121,6 @@ security = HTTPBasic()
 async def serve_html(
     request: Request,
     credentials: HTTPBasicCredentials = Depends(security),
-    current_user: str = Depends(get_current_user),
 ):
     """Serve the main HTML page at the root endpoint."""
 
@@ -161,88 +135,7 @@ async def serve_html(
             headers={"WWW-Authenticate": "Basic"},
         )
 
-    if not current_user:
-        return RedirectResponse(url="/signin")
-
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "user": current_user}
-    )
-
-
-@app.get("/signup", response_class=HTMLResponse)
-async def show_signup(request: Request):
-    """Render the signup page."""
-    return templates.TemplateResponse("signup.html", {"request": request})
-
-
-@app.post("/signup", response_class=HTMLResponse)
-async def signup(
-    request: Request,
-    username: str = Form(...),
-    email: str = Form(...),
-    password: str = Form(...),
-    db: AsyncSession = Depends(get_db),
-):
-    """Handle user signup."""
-    query = select(User).where((User.username == username) | (User.email == email))
-    result = await db.execute(query)
-    existing_user = result.scalar_one_or_none()
-
-    if existing_user:
-        error = "Username or email already exists."
-        return templates.TemplateResponse(
-            "signup.html", {"request": request, "error": error}
-        )
-
-    # Add new user
-    hashed_password = hash_password(password)
-    new_user = User(username=username, email=email, hashed_password=hashed_password)
-    db.add(new_user)
-    await db.commit()
-    return RedirectResponse(url="/signin", status_code=303)
-
-
-@app.get("/signin", response_class=HTMLResponse)
-async def show_signin(request: Request):
-    """Render the signin page."""
-    return templates.TemplateResponse("signin.html", {"request": request})
-
-
-@app.post("/signin", response_class=HTMLResponse)
-async def signin(
-    request: Request,
-    username_or_email: str = Form(...),
-    password: str = Form(...),
-    db: AsyncSession = Depends(get_db),
-):
-    """Handle user signin."""
-    # Query for the user based on username or email
-    query = select(User).where(
-        (User.username == username_or_email) | (User.email == username_or_email)
-    )
-    result = await db.execute(query)
-    user = result.scalar_one_or_none()
-
-    # Validation check
-    if not user or not verify_password(password, user.hashed_password):
-        # Render the template with the error message
-        error_message = "Invalid username/email or password."
-        return templates.TemplateResponse(
-            "signin.html", {"request": request, "error": error_message}
-        )
-
-    # Successful login
-    response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(key="session", value=user.username)  # Set session cookie
-    return response
-
-
-@app.get("/signout")
-async def signout():
-    """Handle user signout."""
-    response = RedirectResponse(url="/signin", status_code=303)
-    response.delete_cookie("session")
-    return response
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 # Health check endpoint
@@ -299,8 +192,3 @@ async def search_query(query: str, top_k: int = 5):
             status_code=500,
             detail="An error occurred while processing the search request.",
         )
-
-
-@app.on_event("startup")
-async def startup_event():
-    await init_db()
