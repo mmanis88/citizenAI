@@ -1,9 +1,13 @@
+import os
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Define the database URL (update with your actual database URL)
-DATABASE_URL = "postgresql+asyncpg://user:password@db/citizen_ai"
+# Use the DATABASE_URL from environment variables, fallback to a default if not set
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/default_db"
+)
 
 # Create the SQLAlchemy async engine
 engine = create_async_engine(DATABASE_URL, echo=True)

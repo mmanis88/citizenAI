@@ -3,25 +3,10 @@ services:
     build:
       context: . # Path to the directory containing your Dockerfile
     ports:
-      - "8001:8001" # Map container port 8001 to host port 8001
+      - "8001:8001" # Map container port 8000 to host port 8000
     volumes:
-      - .:/app # Mount local files into the container for development
+      - .:/app # Optional: Mount local files into the container for development
     env_file:
-      - .env
-    depends_on:
-      - db
+      - .env # Ensure this points to your .env file
+    depends_on: []
     command: poetry run uvicorn app_fastapi:app --host 0.0.0.0 --port 8001
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: citizen_ai
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
