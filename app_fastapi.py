@@ -3,9 +3,10 @@ import pickle
 
 import faiss
 from dotenv import load_dotenv
-from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openai import AuthenticationError, OpenAI
@@ -134,15 +135,35 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_current_user(session: str = Cookie(None)):
     if not session:
         return None
-    return session  # Replace with a database lookup if needed
+    return session
 
 
 # Root endpoint to serve HTML
+security = HTTPBasic()
+
+
 @app.get("/", response_class=HTMLResponse)
-async def serve_html(request: Request, current_user: str = Depends(get_current_user)):
+async def serve_html(
+    request: Request,
+    credentials: HTTPBasicCredentials = Depends(security),
+    current_user: str = Depends(get_current_user),
+):
     """Serve the main HTML page at the root endpoint."""
+
+    # Hardcoded example credentials - replace this with secure verification logic
+    valid_username = "admin"
+    valid_password = "citizenai"
+
+    if credentials.username != valid_username or credentials.password != valid_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
     if not current_user:
         return RedirectResponse(url="/signin")
+
     return templates.TemplateResponse(
         "index.html", {"request": request, "user": current_user}
     )
@@ -154,21 +175,24 @@ async def show_signup(request: Request):
     return templates.TemplateResponse("signup.html", {"request": request})
 
 
-@app.post("/signup")
+@app.post("/signup", response_class=HTMLResponse)
 async def signup(
+    request: Request,
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Handle user signup."""
-    # Check if user or email already exists
     query = select(User).where((User.username == username) | (User.email == email))
     result = await db.execute(query)
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
-        raise HTTPException(status_code=400, detail="Username or email already exists.")
+        error = "Username or email already exists."
+        return templates.TemplateResponse(
+            "signup.html", {"request": request, "error": error}
+        )
 
     # Add new user
     hashed_password = hash_password(password)
@@ -184,9 +208,10 @@ async def show_signin(request: Request):
     return templates.TemplateResponse("signin.html", {"request": request})
 
 
-@app.post("/signin")
+@app.post("/signin", response_class=HTMLResponse)
 async def signin(
-    username_or_email: str = Form(...),  # Accept either username or email
+    request: Request,
+    username_or_email: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -198,12 +223,15 @@ async def signin(
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
+    # Validation check
     if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=400, detail="Invalid username/email or password."
+        # Render the template with the error message
+        error_message = "Invalid username/email or password."
+        return templates.TemplateResponse(
+            "signin.html", {"request": request, "error": error_message}
         )
 
-    # Set the session cookie and redirect to the home page
+    # Successful login
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(key="session", value=user.username)  # Set session cookie
     return response
