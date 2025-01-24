@@ -3,12 +3,19 @@ import pickle
 
 import faiss
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openai import AuthenticationError, OpenAI
+from passlib.context import CryptContext
+from fastapi import Cookie
+from sqlalchemy.future import select
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_db, init_db
+from models.user import User
 
 from faiss_search import search_faiss_index  # Import the updated function
 
@@ -26,8 +33,13 @@ if not OPENAI_API_KEY:
         "OpenAI API key is not set. Ensure OPENAI_API_KEY is passed as an environment variable."
     )
 
+
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 # FastAPI app initialization
 app = FastAPI()
@@ -110,13 +122,101 @@ def generate_summary_with_clickable_citations(
         return "An error occurred while generating the summary. Please try again later."
 
 
+# Hash password
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+# Verify password
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+# User authentication dependency
+def get_current_user(session: str = Cookie(None)):
+    if not session:
+        return None
+    return session  # Replace with a database lookup if needed
+
+
+
 # Root endpoint to serve HTML
 @app.get("/", response_class=HTMLResponse)
-async def serve_html(request: Request):
-    """
-    Serve the main HTML page at the root endpoint.
-    """
-    return templates.TemplateResponse("index.html", {"request": request})
+async def serve_html(request: Request, current_user: str = Depends(get_current_user)):
+    """Serve the main HTML page at the root endpoint."""
+    if not current_user:
+        return RedirectResponse(url="/signin")
+    return templates.TemplateResponse("index.html", {"request": request, "user": current_user})
+
+@app.get("/signup", response_class=HTMLResponse)
+async def show_signup(request: Request):
+    """Render the signup page."""
+    return templates.TemplateResponse("signup.html", {"request": request})
+
+
+
+
+@app.post("/signup")
+async def signup(
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle user signup."""
+    # Check if user or email already exists
+    query = select(User).where((User.username == username) | (User.email == email))
+    result = await db.execute(query)
+    existing_user = result.scalar_one_or_none()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username or email already exists.")
+
+    # Add new user
+    hashed_password = hash_password(password)
+    new_user = User(username=username, email=email, hashed_password=hashed_password)
+    db.add(new_user)
+    await db.commit()
+    return RedirectResponse(url="/signin", status_code=303)
+
+
+
+
+@app.get("/signin", response_class=HTMLResponse)
+async def show_signin(request: Request):
+    """Render the signin page."""
+    return templates.TemplateResponse("signin.html", {"request": request})
+
+
+
+
+@app.post("/signin")
+async def signin(
+    username_or_email: str = Form(...),  # Accept either username or email
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle user signin."""
+    # Query for the user based on username or email
+    query = select(User).where(
+        (User.username == username_or_email) | (User.email == username_or_email)
+    )
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid username/email or password.")
+
+    # Set the session cookie and redirect to the home page
+    response = RedirectResponse(url="/", status_code=303)
+    response.set_cookie(key="session", value=user.username)  # Set session cookie
+    return response
+
+
+@app.get("/signout")
+async def signout():
+    """Handle user signout."""
+    response = RedirectResponse(url="/signin", status_code=303)
+    response.delete_cookie("session")
+    return response
 
 
 # Health check endpoint
@@ -173,3 +273,7 @@ async def search_query(query: str, top_k: int = 5):
             status_code=500,
             detail="An error occurred while processing the search request.",
         )
+
+@app.on_event("startup")
+async def startup_event():
+    await init_db()

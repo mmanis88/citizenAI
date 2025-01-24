@@ -36,7 +36,7 @@
         <p id="answerText">Your answer will appear here.</p>
       </div>
 
-      <div id="sourcesContainer" class="sources">
+      <div id="sourcesContainer" class="sources" style="display: none">
         <h3>Where I found this:</h3>
         <div id="sourcesList" class="source-list"></div>
       </div>
@@ -62,19 +62,29 @@
             document.getElementById(
               "answerText"
             ).innerHTML = `<p>${data.summary}</p>`;
-            data.sources.forEach((source) => {
-              document.getElementById("sourcesList").innerHTML += `
-                            <div class="source-item">
-                                <img src="./static/images/book-icon.png" alt="Book Icon" class="source-icon">
-                                <a href="${source.url}" target="_blank">${source.title}</a>
-                            </div>
-                        `;
-            });
+            if (data.sources && data.sources.length > 0) {
+              data.sources.forEach((source) => {
+                document.getElementById("sourcesList").innerHTML += `
+                  <div class="source-item">
+                    <img src="./static/images/book-icon.png" alt="Book Icon" class="source-icon">
+                    <a href="${source.url}" target="_blank">${source.title}</a>
+                  </div>
+                `;
+              });
+              // Show the sources container if sources are present
+              document.getElementById("sourcesContainer").style.display =
+                "block";
+            } else {
+              // Hide the sources container if no sources are present
+              document.getElementById("sourcesContainer").style.display =
+                "none";
+            }
           }
         } catch (error) {
           console.error("Fetch error:", error);
           document.getElementById("answerText").innerHTML =
             "<p>Something went wrong. Please try again.</p>";
+          document.getElementById("sourcesContainer").style.display = "none";
         }
       }
 
