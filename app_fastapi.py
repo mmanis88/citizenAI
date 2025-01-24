@@ -126,9 +126,11 @@ def generate_summary_with_clickable_citations(
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
+
 # Verify password
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
 
 # User authentication dependency
 def get_current_user(session: str = Cookie(None)):
@@ -137,21 +139,21 @@ def get_current_user(session: str = Cookie(None)):
     return session  # Replace with a database lookup if needed
 
 
-
 # Root endpoint to serve HTML
 @app.get("/", response_class=HTMLResponse)
 async def serve_html(request: Request, current_user: str = Depends(get_current_user)):
     """Serve the main HTML page at the root endpoint."""
     if not current_user:
         return RedirectResponse(url="/signin")
-    return templates.TemplateResponse("index.html", {"request": request, "user": current_user})
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "user": current_user}
+    )
+
 
 @app.get("/signup", response_class=HTMLResponse)
 async def show_signup(request: Request):
     """Render the signup page."""
     return templates.TemplateResponse("signup.html", {"request": request})
-
-
 
 
 @app.post("/signup")
@@ -178,14 +180,10 @@ async def signup(
     return RedirectResponse(url="/signin", status_code=303)
 
 
-
-
 @app.get("/signin", response_class=HTMLResponse)
 async def show_signin(request: Request):
     """Render the signin page."""
     return templates.TemplateResponse("signin.html", {"request": request})
-
-
 
 
 @app.post("/signin")
@@ -203,7 +201,9 @@ async def signin(
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid username/email or password.")
+        raise HTTPException(
+            status_code=400, detail="Invalid username/email or password."
+        )
 
     # Set the session cookie and redirect to the home page
     response = RedirectResponse(url="/", status_code=303)
@@ -273,6 +273,7 @@ async def search_query(query: str, top_k: int = 5):
             status_code=500,
             detail="An error occurred while processing the search request.",
         )
+
 
 @app.on_event("startup")
 async def startup_event():

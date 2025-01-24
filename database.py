@@ -14,10 +14,12 @@ async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession
 # Create the declarative base for defining models
 Base = declarative_base()  # This is what your models will inherit from
 
+
 # Dependency to get the database session
 async def get_db():
     async with async_session() as session:
         yield session
+
 
 async def init_db():
     async with engine.begin() as conn:
