@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.declarative import \
-    declarative_base  # Import declarative_base
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # Define the database URL (update with your actual database URL)
