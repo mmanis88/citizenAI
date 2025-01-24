@@ -3,21 +3,19 @@ import pickle
 
 import faiss
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Form, Depends
+from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openai import AuthenticationError, OpenAI
 from passlib.context import CryptContext
-from fastapi import Cookie
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db, init_db
-from models.user import User
-
 from faiss_search import search_faiss_index  # Import the updated function
+from models.user import User
 
 load_dotenv()
 
