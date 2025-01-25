@@ -4,13 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Citizen AI - Ask Anything!</title>
-    <!-- Update path to load CSS directly from root -->
     <link rel="stylesheet" href="./static/css/styles.css" />
+    <style>
+      .loader {
+        display: none;
+        width: 40px;
+        height: 40px;
+        margin: 10px auto;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #0078d7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <!-- Update path to load image directly from root -->
         <img
           src="./static/images/logo.png"
           alt="Citizen AI Logo"
@@ -33,68 +52,50 @@
 
       <div id="summaryContainer" class="summary">
         <h2>Here’s what I found:</h2>
+        <!-- Spinning Loader -->
+        <div id="loader" class="loader"></div>
         <p id="answerText">Your answer will appear here.</p>
       </div>
 
-      <div id="sourcesContainer" class="sources" style="display: none">
-        <h3>Where I found this:</h3>
-        <div id="sourcesList" class="source-list"></div>
-      </div>
-    </div>
+      <script>
+        async function fetchResults(query) {
+          const loader = document.getElementById("loader");
+          const answerText = document.getElementById("answerText");
 
-    <script>
-      async function fetchResults(query) {
-        try {
-          const baseURL = window.location.origin;
-          const response = await fetch(
-            `${baseURL}/search?query=${encodeURIComponent(query)}`
-          );
-          const data = await response.json();
+          try {
+            // Show loader and clear previous content
+            loader.style.display = "block";
+            answerText.innerHTML = "";
 
-          document.getElementById("answerText").innerHTML = "";
-          document.getElementById("sourcesList").innerHTML = "";
+            const baseURL = window.location.origin;
+            const response = await fetch(
+              `${baseURL}/search?query=${encodeURIComponent(query)}`
+            );
+            const data = await response.json();
 
-          if (data.error) {
-            document.getElementById(
-              "answerText"
-            ).innerHTML = `<p>${data.error}</p>`;
-          } else {
-            document.getElementById(
-              "answerText"
-            ).innerHTML = `<p>${data.summary}</p>`;
-            if (data.sources && data.sources.length > 0) {
-              data.sources.forEach((source) => {
-                document.getElementById("sourcesList").innerHTML += `
-                  <div class="source-item">
-                    <img src="./static/images/book-icon.png" alt="Book Icon" class="source-icon">
-                    <a href="${source.url}" target="_blank">${source.title}</a>
-                  </div>
-                `;
-              });
-              // Show the sources container if sources are present
-              document.getElementById("sourcesContainer").style.display =
-                "block";
+            if (data.error) {
+              answerText.innerHTML = `<p>${data.error}</p>`;
             } else {
-              // Hide the sources container if no sources are present
-              document.getElementById("sourcesContainer").style.display =
-                "none";
+              answerText.innerHTML = `<p>${data.summary}</p>`;
             }
+          } catch (error) {
+            console.error("Fetch error:", error);
+            answerText.innerHTML =
+              "<p>Something went wrong. Please try again.</p>";
+          } finally {
+            // Hide loader after fetching is complete
+            loader.style.display = "none";
           }
-        } catch (error) {
-          console.error("Fetch error:", error);
-          document.getElementById("answerText").innerHTML =
-            "<p>Something went wrong. Please try again.</p>";
-          document.getElementById("sourcesContainer").style.display = "none";
         }
-      }
 
-      document
-        .getElementById("searchForm")
-        .addEventListener("submit", function (event) {
-          event.preventDefault();
-          const query = document.getElementById("queryInput").value;
-          if (query) fetchResults(query);
-        });
-    </script>
+        document
+          .getElementById("searchForm")
+          .addEventListener("submit", function (event) {
+            event.preventDefault();
+            const query = document.getElementById("queryInput").value;
+            if (query) fetchResults(query);
+          });
+      </script>
+    </div>
   </body>
 </html>
