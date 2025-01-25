@@ -6,15 +6,16 @@
     <title>Citizen AI - Ask Anything!</title>
     <link rel="stylesheet" href="./static/css/styles.css" />
     <style>
+      /* Smaller spinning loader */
       .loader {
-        display: none;
+        display: none; /* Initially hidden */
         width: 40px;
         height: 40px;
-        margin: 10px auto;
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #0078d7;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
+        margin: 10px auto; /* Center the loader horizontally */
+        border: 4px solid #f3f3f3; /* Light gray border */
+        border-top: 4px solid #0078d7; /* Blue top border */
+        border-radius: 50%; /* Circular shape */
+        animation: spin 1s linear infinite; /* Spin animation */
       }
 
       @keyframes spin {
@@ -57,15 +58,24 @@
         <p id="answerText">Your answer will appear here.</p>
       </div>
 
+      <div id="sourcesContainer" class="sources" style="display: none">
+        <h3>Where I found this:</h3>
+        <div id="sourcesList" class="source-list"></div>
+      </div>
+
       <script>
         async function fetchResults(query) {
           const loader = document.getElementById("loader");
           const answerText = document.getElementById("answerText");
+          const sourcesList = document.getElementById("sourcesList");
+          const sourcesContainer = document.getElementById("sourcesContainer");
 
           try {
             // Show loader and clear previous content
             loader.style.display = "block";
-            answerText.innerHTML = "";
+            answerText.innerHTML = ""; // Clear previous answer
+            sourcesList.innerHTML = ""; // Clear previous sources
+            sourcesContainer.style.display = "none"; // Hide sources container
 
             const baseURL = window.location.origin;
             const response = await fetch(
@@ -77,6 +87,25 @@
               answerText.innerHTML = `<p>${data.error}</p>`;
             } else {
               answerText.innerHTML = `<p>${data.summary}</p>`;
+
+              // Append sources if available
+              if (data.sources && data.sources.length > 0) {
+                data.sources.forEach((source) => {
+                  const sourceItem = document.createElement("div");
+                  sourceItem.className = "source-item";
+                  sourceItem.innerHTML = `
+                    <img src="./static/images/book-icon.png" alt="Book Icon" class="source-icon">
+                    <a href="${source.url}" target="_blank">${source.title}</a>
+                  `;
+                  sourcesList.appendChild(sourceItem);
+                });
+
+                // Show the sources container if sources exist
+                sourcesContainer.style.display = "block";
+              } else {
+                // Hide the sources container if no sources are present
+                sourcesContainer.style.display = "none";
+              }
             }
           } catch (error) {
             console.error("Fetch error:", error);
